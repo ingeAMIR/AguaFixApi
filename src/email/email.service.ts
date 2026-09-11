@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { envs } from '../config/envs';
 
 @Injectable()
@@ -33,11 +34,15 @@ export class EmailService {
         to,
         subject,
         html: template,
-      })) as { messageId?: string };
+      })) as SMTPTransport.SentMessageInfo;
       const messageId = info?.messageId || 'enviado';
       this.logger.log(
         `Correo enviado exitosamente a: ${to} (MessageId: ${messageId})`,
       );
+      const testUrl = nodemailer.getTestMessageUrl(info);
+      if (testUrl) {
+        this.logger.log(`🔗 Vista previa del correo: ${testUrl}`);
+      }
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
