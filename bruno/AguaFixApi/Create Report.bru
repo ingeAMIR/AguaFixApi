@@ -1,0 +1,20 @@
+meta {
+  name: Create Report
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:3000/reports
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "address": "Av. Universidad #602, Col. Lomas del Campestre",
+    "description": "Fuga considerable de agua potable en banqueta frente a la entrada principal",
+    "severity": "high",
+    "reporterPhone": "4771234567"
+  }
+}

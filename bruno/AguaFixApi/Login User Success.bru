@@ -1,0 +1,18 @@
+meta {
+  name: Login User Success
+  type: http
+  seq: 4
+}
+
+post {
+  url: http://localhost:3000/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "juan.perez@municipio.gob.mx",
+    "password": "Password123!"
+  }
+}

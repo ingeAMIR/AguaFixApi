@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "AguaFix API",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

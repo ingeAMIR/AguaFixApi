@@ -1,0 +1,16 @@
+services:
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: aguafix_postgres_db
+    restart: always
+    environment:
+      POSTGRES_DB: aguafix_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secretpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_aguafix_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_aguafix_data:
