@@ -1,8 +1,6 @@
 # 💧 AguaFix API
 
-API construida con **NestJS (v11)** y **TypeScript** para la gestión y reporte ciudadano de fugas de agua en la vía pública por parte del municipio.
-
-Cuando un ciudadano registra un reporte, la información se persiste en una base de datos **PostgreSQL** mediante **TypeORM** (utilizando migraciones con `synchronize: false`) y de inmediato se envía una notificación por correo electrónico a la cuadrilla de mantenimiento utilizando **Nodemailer** con una plantilla HTML legible y responsiva.
+API construida con **NestJS (v11)** y **TypeScript** para la gestión y reporte ciudadano de fugas de agua en la vía pública con evidencia fotográfica en **AWS S3**, base de datos **PostgreSQL** mediante **TypeORM** (con migraciones y `synchronize: false`), notificaciones por correo electrónico con **Nodemailer**, contenedor **Docker** y despliegue continuo a **Docker Hub** con **GitHub Actions**.
 
 ---
 
@@ -11,21 +9,26 @@ Cuando un ciudadano registra un reporte, la información se persiste en una base
 El sistema sigue una arquitectura modular en 4 capas estrictas:
 ```
 Módulo -> Controller -> Service -> Repository -> Base de Datos (PostgreSQL)
+                           │
+                           ├──> StorageService (AWS S3)
+                           └──> EmailService (Nodemailer)
 ```
 
 - **Módulo (`*.module.ts`)**: Agrupa y gestiona la inyección de dependencias (`TypeOrmModule`, controladores, servicios, repositorios).
-- **Controller (`*.controller.ts`)**: Expone las rutas HTTP, valida las entradas contra los DTOs usando `ValidationPipe` y delega al servicio.
-- **Service (`*.service.ts`)**: Contiene la lógica de negocio (validaciones, hashing con `bcryptjs`, llamado a `EmailService`, orquestación).
+- **Controller (`*.controller.ts`)**: Expone las rutas HTTP, gestiona subidas multipart (`FileInterceptor('photo')`), valida las entradas contra los DTOs usando `ValidationPipe` y delega al servicio.
+- **Service (`*.service.ts`)**: Contiene la lógica de negocio (validaciones, hashing con `bcryptjs`, subida a S3 mediante `StorageService`, llamado a `EmailService`, orquestación).
 - **Repository (`*.repository.ts`)**: Capa de persistencia dedicada para interactuar con TypeORM (`WATER_REPORT`, `SYSTEM_USER`).
+- **Storage (`src/storage/`)**: Servicio dedicado que interactúa con `@aws-sdk/client-s3` para almacenar imágenes en buckets de Amazon S3 y generar URLs públicas.
 
 ---
 
 ## 📋 Requisitos Previos
 
-- **Node.js**: v18+ o v22+
-- **npm**: v9+ o v10+
-- **Docker & Docker Compose** (para levantar PostgreSQL)
-- **Bruno** (opcional, para ejecutar las pruebas de API)
+- **Node.js**: v22+
+- **npm**: v10+
+- **Docker & Docker Compose** (para levantar PostgreSQL y la API)
+- **Cuenta de AWS** con bucket S3 configurado para almacenamiento público de fotos
+- **Cuenta de Docker Hub** y repositorio creado (ej. `<usuario>/aguafix-api`)
 
 ---
 
@@ -36,7 +39,7 @@ Módulo -> Controller -> Service -> Repository -> Base de Datos (PostgreSQL)
 cp .env.example .env
 ```
 
-2. Revisa las variables en `.env`:
+2. Configura las variables en `.env`:
 ```env
 PORT=3000
 
@@ -48,26 +51,35 @@ DB_PASSWORD=secretpassword
 DB_NAME=aguafix_db
 
 # Configuración de Correo (Nodemailer SMTP)
-MAIL_HOST=sandbox.smtp.mailtrap.io
-MAIL_PORT=2525
+MAIL_HOST=smtp.ethereal.email
+MAIL_PORT=587
 MAIL_USER=tu_usuario_smtp
 MAIL_PASSWORD=tu_password_smtp
 MAIL_FROM="AguaFix Alertas <no-reply@aguafix.gob.mx>"
 MAINTENANCE_EMAIL=cuadrilla@aguafix.gob.mx
+
+# AWS S3 Storage
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=tu_aws_access_key
+AWS_SECRET_ACCESS_KEY=tu_aws_secret_key
+AWS_BUCKET_NAME=tu_bucket_s3
+
+# Docker Hub (para compose.yaml)
+DOCKER_USER=tu_usuario_dockerhub
 ```
 
 ---
 
-## 🚀 Instalación y Puesta en Marcha
+## 🚀 Instalación y Puesta en Marcha Local
 
 ### 1. Instalar dependencias
 ```bash
 npm install
 ```
 
-### 2. Iniciar la Base de Datos con Docker
+### 2. Iniciar PostgreSQL con Docker
 ```bash
-docker compose up -d
+docker compose up -d postgres-db
 ```
 
 ### 3. Ejecutar las Migraciones
@@ -75,14 +87,9 @@ docker compose up -d
 npm run migration:run
 ```
 
-Si deseas revertir la última migración:
+Para revertir la última migración:
 ```bash
 npm run migration:revert
-```
-
-Para generar una nueva migración tras cambiar entidades:
-```bash
-npm run migration:generate -- src/migrations/NombreDeLaMigracion
 ```
 
 ### 4. Iniciar la Aplicación en Modo Desarrollo
@@ -97,17 +104,15 @@ La aplicación estará disponible en `http://localhost:3000`.
 
 ### 💧 Reportes de Fugas (`/reports`)
 
-#### 1. Crear un reporte
+#### 1. Crear un reporte con foto (Multipart)
 - **POST** `/reports`
-- **Body (`CreateReportDto`):**
-```json
-{
-  "address": "Av. Universidad #602, Col. Lomas del Campestre",
-  "description": "Fuga considerable de agua potable en banqueta frente a la entrada principal",
-  "severity": "high",
-  "reporterPhone": "4771234567"
-}
-```
+- **Content-Type:** `multipart/form-data`
+- **Campos del Formulario:**
+  - `address` (texto): Dirección o referencia de la fuga
+  - `description` (texto): Observación detallada de la fuga
+  - `severity` (texto): `low`, `medium` o `high`
+  - `reporterPhone` (texto): Teléfono de contacto
+  - `photo` (archivo, **obligatorio**): Imagen fotográfica de la fuga (JPG, PNG, WEBP)
 - **Respuesta (`201 Created`):**
 ```json
 {
@@ -117,14 +122,16 @@ La aplicación estará disponible en `http://localhost:3000`.
   "severity": "high",
   "reporterPhone": "4771234567",
   "isResolved": false,
-  "createdAt": "2026-09-11T21:50:00.000Z"
+  "photoUrl": "https://aguafix-reports-bucket.s3.us-east-1.amazonaws.com/reports/1741800000000-uuid-fuga.jpg",
+  "repairPhotoUrl": null,
+  "createdAt": "2026-10-24T18:00:00.000Z"
 }
 ```
-*Efecto secundario:* Despacha un correo electrónico a `envs.MAINTENANCE_EMAIL` con el formato HTML generado por `generateReportTemplate`.
+*Efecto secundario:* Sube la foto al bucket S3 bajo la carpeta `reports/`, guarda el reporte en `WATER_REPORT` con `photoUrl`, y envía un correo electrónico a la cuadrilla de mantenimiento mostrando la foto dentro de la plantilla HTML mediante una etiqueta `<img>`.
 
 #### 2. Listar todos los reportes
 - **GET** `/reports`
-- **Respuesta (`200 OK`):** Lista de reportes ordenados.
+- **Respuesta (`200 OK`):** Lista de reportes, incluyendo `photoUrl` y `repairPhotoUrl`.
 
 ---
 
@@ -141,18 +148,6 @@ La aplicación estará disponible en `http://localhost:3000`.
   "isNotificationEnabled": true
 }
 ```
-- **Respuesta (`201 Created`):**
-```json
-{
-  "message": "Usuario registrado exitosamente",
-  "user": {
-    "id": 1,
-    "name": "Juan Perez",
-    "email": "juan.perez@municipio.gob.mx",
-    "isNotificationEnabled": true
-  }
-}
-```
 
 #### 2. Inicio de sesión
 - **POST** `/auth/login`
@@ -163,45 +158,30 @@ La aplicación estará disponible en `http://localhost:3000`.
   "password": "Password123!"
 }
 ```
-- **Respuesta Éxito (`200 OK`):**
-```json
-{
-  "message": "Inicio de sesión exitoso",
-  "user": {
-    "id": 1,
-    "name": "Juan Perez",
-    "email": "juan.perez@municipio.gob.mx",
-    "isNotificationEnabled": true
-  }
-}
+- **Error (`400 Bad Request`):** Lanza `BadRequestException` con mensaje claro si las credenciales son incorrectas.
+
+---
+
+## 🐳 Docker y Docker Hub
+
+### Construir la imagen localmente:
+```bash
+docker build -t <tu_usuario>/aguafix-api:latest .
 ```
-- **Respuesta Error (`400 Bad Request`):**
-```json
-{
-  "message": "Credenciales inválidas: correo o contraseña incorrectos",
-  "error": "Bad Request",
-  "statusCode": 400
-}
+
+### Ejecutar con Docker Compose (API + PostgreSQL):
+```bash
+docker compose up -d
 ```
 
 ---
 
-## 📧 Plantilla de Correo HTML
+## 🔄 Integración Continua (CI/CD) con GitHub Actions
 
-Ubicada en `src/reports/templates/report.template.ts`, la función `generateReportTemplate` genera un correo con:
-- Encabezado institucional con gradiente municipal.
-- Tabla estilizada con estilos inline para compatibilidad con clientes de correo (Outlook, Gmail, etc.).
-- Badge de severidad con color distintivo (Rojo: Alta, Naranja: Media, Verde: Baja).
-- Dirección, descripción y teléfono de contacto clickeable (`tel:`).
-- Nota de aviso para atención inmediata por la cuadrilla.
-
----
-
-## 🧪 Pruebas con Colección Bruno
-
-En la carpeta `bruno/AguaFixApi` se encuentran todas las peticiones listas para importar y probar en **Bruno**:
-- `Create Report`
-- `Get All Reports`
-- `Register User`
-- `Login User Success`
-- `Login User Invalid Credentials`
+El repositorio cuenta con un flujo de trabajo en `.github/workflows/docker-publish.yml` que:
+1. Se dispara automáticamente con cada `push` a la rama `main`.
+2. Realiza login en Docker Hub usando los secretos de GitHub:
+   - `DOCKER_USER`: Usuario de Docker Hub
+   - `DOCKER_PASSWORD`: Token de acceso personal (PAT) de Docker Hub
+3. Construye la imagen con `Dockerfile` en base a `node:22-alpine`.
+4. Publica la imagen automáticamente en Docker Hub con la etiqueta `latest`.

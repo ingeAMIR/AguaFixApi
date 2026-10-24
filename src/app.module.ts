@@ -4,6 +4,7 @@ import { dataSourceOptions } from './config/typeorm.config';
 import { ReportsModule } from './reports/reports.module';
 import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './email/email.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { EmailModule } from './email/email.module';
     ReportsModule,
     AuthModule,
     EmailModule,
+    StorageModule,
   ],
   controllers: [],
   providers: [],

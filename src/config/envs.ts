@@ -25,4 +25,17 @@ export const envs = {
     .get('MAINTENANCE_EMAIL')
     .default('cuadrilla@aguafix.gob.mx')
     .asString(),
+
+  // Configuración de AWS S3
+  AWS_REGION: env.get('AWS_REGION').default('us-east-1').asString(),
+  AWS_ACCESS_KEY_ID: env.get('AWS_ACCESS_KEY_ID').default('').asString(),
+  AWS_SECRET_ACCESS_KEY: env
+    .get('AWS_SECRET_ACCESS_KEY')
+    .default('')
+    .asString(),
+  AWS_SESSION_TOKEN: env.get('AWS_SESSION_TOKEN').default('').asString(),
+  AWS_BUCKET_NAME: env
+    .get('AWS_BUCKET_NAME')
+    .default('aguafix-reports-bucket')
+    .asString(),
 };

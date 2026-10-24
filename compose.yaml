@@ -1,16 +1,57 @@
 services:
+  api:
+    image: ${DOCKER_USER:-ingeamir}/aguafix-api:latest
+    container_name: aguafix_api
+    restart: always
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      DB_HOST: postgres-db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-secretpassword}
+      DB_NAME: ${DB_NAME:-aguafix_db}
+      MAIL_HOST: ${MAIL_HOST:-smtp.ethereal.email}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-AguaFix Alertas <no-reply@aguafix.gob.mx>}
+      MAINTENANCE_EMAIL: ${MAINTENANCE_EMAIL:-cuadrilla@aguafix.gob.mx}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-aguafix-reports-bucket}
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - aguafix_network
+
   postgres-db:
     image: postgres:16-alpine
     container_name: aguafix_postgres_db
     restart: always
     environment:
-      POSTGRES_DB: aguafix_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: ${DB_NAME:-aguafix_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secretpassword}
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-aguafix_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     volumes:
       - postgres_aguafix_data:/var/lib/postgresql/data
+    networks:
+      - aguafix_network
 
 volumes:
   postgres_aguafix_data:
+
+networks:
+  aguafix_network:
+    driver: bridge

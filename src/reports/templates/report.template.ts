@@ -3,11 +3,17 @@ export interface ReportTemplateData {
   description: string;
   severity: string;
   reporterPhone: string;
+  photoUrl?: string;
   id?: number;
   createdAt?: Date;
 }
 
-export const generateReportTemplate = (dto: ReportTemplateData): string => {
+export const generateReportTemplate = (
+  dto: ReportTemplateData,
+  photoUrl?: string,
+): string => {
+  const finalPhotoUrl = photoUrl || dto.photoUrl;
+
   const severityColors: Record<
     string,
     { bg: string; text: string; label: string }
@@ -22,6 +28,23 @@ export const generateReportTemplate = (dto: ReportTemplateData): string => {
     text: '#2d3748',
     label: dto.severity || 'No especificada',
   };
+
+  const photoHtml = finalPhotoUrl
+    ? `
+        <!-- Leak Photo Section -->
+        <div style="margin-top: 24px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center;">
+          <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #1e293b; text-align: left;">
+            📸 Evidencia Fotográfica de la Fuga:
+          </p>
+          <a href="${finalPhotoUrl}" target="_blank" style="display: inline-block;">
+            <img src="${finalPhotoUrl}" alt="Foto de la fuga de agua" style="max-width: 100%; height: auto; max-height: 400px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: block; margin: 0 auto; object-fit: cover;" />
+          </a>
+          <p style="margin: 8px 0 0 0; font-size: 12px; color: #64748b;">
+            Haz clic en la imagen si deseas verla en tamaño completo.
+          </p>
+        </div>
+      `
+    : '';
 
   return `
 <!DOCTYPE html>
@@ -73,6 +96,8 @@ export const generateReportTemplate = (dto: ReportTemplateData): string => {
             </td>
           </tr>
         </table>
+
+        ${photoHtml}
 
         <!-- Notice -->
         <div style="margin-top: 24px; padding: 14px 16px; background-color: #eff6ff; border-left: 4px solid #0284c7; border-radius: 4px;">
