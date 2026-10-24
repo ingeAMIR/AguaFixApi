@@ -59,8 +59,8 @@ export const generateReportTemplate = (
     <!-- Header -->
     <tr>
       <td style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); padding: 28px 24px; text-align: center; color: #ffffff;">
-        <h1 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 700; letter-spacing: 0.5px;">💧 AguaFix - Sistema de Reportes</h1>
-        <p style="margin: 0; font-size: 15px; opacity: 0.95;">Aviso de Fuga de Agua en Vía Pública</p>
+        <h1 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 700; letter-spacing: 0.5px;">💧 AguaFix - Prueba de Sistema de Reportes</h1>
+        <p style="margin: 0; font-size: 15px; opacity: 0.95;">Prueba Aviso de Fuga de Agua en Vía Pública</p>
       </td>
     </tr>
 
